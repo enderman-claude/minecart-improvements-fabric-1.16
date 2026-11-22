@@ -3,9 +3,7 @@
   "package": "dev.endermanclaude.minecartimprovements.mixin",
   "compatibilityLevel": "JAVA_8",
   "mixins": [
-    "AbstractMinecartSlopeMixin",
-    "AbstractMinecartSpeedMixin",
-    "AbstractMinecartJumpMixin"
+    "AbstractMinecartMixin"
   ],
   "injectors": {
     "defaultRequire": 1

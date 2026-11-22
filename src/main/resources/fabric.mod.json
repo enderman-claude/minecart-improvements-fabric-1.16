@@ -4,11 +4,19 @@
   "version": "${version}",
   "name": "Minecart Improvements",
   "description": "Raises the minecart maximum speed (backport-style, clean-room, untested).",
-  "authors": ["enderman-claude"],
+  "authors": [
+    "enderman-claude"
+  ],
   "license": "MIT",
   "environment": "*",
-  "entrypoints": {},
-  "mixins": ["minecart-improvements.mixins.json"],
+  "entrypoints": {
+    "main": [
+      "dev.endermanclaude.minecartimprovements.MinecartImprovements"
+    ]
+  },
+  "mixins": [
+    "minecart-improvements.mixins.json"
+  ],
   "depends": {
     "fabricloader": ">=0.11.0",
     "minecraft": "1.16.5",
