@@ -2,6 +2,11 @@
   "required": true,
   "package": "dev.endermanclaude.minecartimprovements.mixin",
   "compatibilityLevel": "JAVA_8",
-  "mixins": ["AbstractMinecartEntityMixin"],
-  "injectors": { "defaultRequire": 1 }
+  "mixins": [
+    "AbstractMinecartEntityMixin",
+    "AbstractMinecartSlopeMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
 }
