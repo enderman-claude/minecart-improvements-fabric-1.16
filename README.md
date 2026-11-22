@@ -1,6 +1,8 @@
 # Minecart Improvements (Fabric 1.16.5)
 
-Raises the minecart maximum speed on Minecraft 1.16.5 with Fabric, and adds slope and gravity effects: downhill carts gain speed, uphill carts lose it.
+Adds slope and gravity effects on Minecraft 1.16.5 with Fabric: downhill carts gain speed, uphill carts lose it.
+
+v0.2.1 removed the speed-cap mixin, which targeted a method that doesn't exist in 1.16.5 and crashed the game at startup.
 
 **Status: untested.** The code has not been run in game yet. The CI build checks that it compiles. Check the mixin target `AbstractMinecartEntity#getMaxSpeed` in your client before relying on it.
 
