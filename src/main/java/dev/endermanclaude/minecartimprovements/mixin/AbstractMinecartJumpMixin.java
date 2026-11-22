@@ -23,7 +23,7 @@ public abstract class AbstractMinecartJumpMixin {
     private void minecartImprovements$jump(CallbackInfo ci) {
         AbstractMinecartEntity self = (AbstractMinecartEntity) (Object) this;
         BlockPos pos = self.getBlockPos();
-        if (!AbstractRailBlock.isRail(self.getWorld().getBlockState(pos))) {
+        if (!AbstractRailBlock.isRail(self.getEntityWorld().getBlockState(pos))) {
             return;
         }
         Vec3d v = self.getVelocity();
@@ -34,7 +34,7 @@ public abstract class AbstractMinecartJumpMixin {
         int dx = (int) Math.round(v.x / horizontal);
         int dz = (int) Math.round(v.z / horizontal);
         BlockPos ahead = pos.add(dx, 0, dz);
-        if (!AbstractRailBlock.isRail(self.getWorld().getBlockState(ahead))) {
+        if (!AbstractRailBlock.isRail(self.getEntityWorld().getBlockState(ahead))) {
             self.setVelocity(v.x, JUMP_VELOCITY, v.z);
         }
     }

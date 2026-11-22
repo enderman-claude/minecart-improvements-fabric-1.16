@@ -21,7 +21,7 @@ public abstract class AbstractMinecartSpeedMixin {
     @Inject(method = "tick", at = @At("TAIL"))
     private void minecartImprovements$speedUp(CallbackInfo ci) {
         AbstractMinecartEntity self = (AbstractMinecartEntity) (Object) this;
-        if (!AbstractRailBlock.isRail(self.getWorld().getBlockState(self.getBlockPos()))) {
+        if (!AbstractRailBlock.isRail(self.getEntityWorld().getBlockState(self.getBlockPos()))) {
             return;
         }
         Vec3d v = self.getVelocity();
