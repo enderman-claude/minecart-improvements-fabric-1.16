@@ -43,6 +43,7 @@ public abstract class AbstractMinecartMixin {
     private boolean minecartImprovements$airborne = false;
     private int minecartImprovements$airTicks = 0;
     private BlockPos minecartImprovements$launchPos = null;
+    private int minecartImprovements$debugTicks = 0;
 
     /** While airborne, move the cart ourselves and skip vanilla rail logic for this tick. */
     @Inject(method = "tick", at = @At("HEAD"), cancellable = true)
@@ -126,6 +127,8 @@ public abstract class AbstractMinecartMixin {
                     minecartImprovements$airborne = true;
                     minecartImprovements$airTicks = 0;
                     minecartImprovements$launchPos = pos;
+                    System.out.println(String.format(
+                            "[minecart-improvements] JUMP gap=%d speed=%.3f vy=%.3f", gap, h, vy));
                 }
             }
         }
@@ -140,6 +143,13 @@ public abstract class AbstractMinecartMixin {
 
         self.setVelocity(v);
         minecartImprovements$lastHorizontal = h;
+
+        // Debug: report what the mod sees, once per second per cart.
+        if (++minecartImprovements$debugTicks % 20 == 0) {
+            System.out.println(String.format(
+                    "[minecart-improvements] onRail=%s super=%s speed=%.3f blocks/tick (%.1f b/s) vy=%.3f airborne=%s",
+                    onRail, onSuper, h, h * 20.0D, v.y, minecartImprovements$airborne));
+        }
     }
 
     /** A rail on this block or one level above or below, so ramps count as rail. */
