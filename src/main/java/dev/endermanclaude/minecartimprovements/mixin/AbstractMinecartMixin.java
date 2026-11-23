@@ -26,7 +26,7 @@ public abstract class AbstractMinecartMixin {
     private static final double SLOPE_MAX_DELTA = 0.25D;
     // speed
     private static final double FAST_CAP = 0.8D;      // normal rail top speed (16 b/s)
-    private static final double FAST_BOOST = 0.03D;   // fractional gain per tick on normal rail
+    private static final double FAST_BOOST = 0.10D;   // fractional gain per tick on normal rail (vanilla loses about 4% per tick)
     private static final double SUPER_CAP = 2.0D;     // super powered rail top speed (40 b/s)
     private static final double SUPER_BOOST = 0.1D;   // blocks per tick added per tick on super rail
     // smoothing: largest horizontal speed increase allowed in one tick, on any rail
