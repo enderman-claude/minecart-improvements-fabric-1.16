@@ -1,19 +1,19 @@
 {
   "type": "minecraft:crafting_shaped",
   "pattern": [
-    "PRP",
-    "RGR",
-    "PRP"
+    "PIP",
+    "IMI",
+    "PIP"
   ],
   "key": {
     "P": {
       "item": "minecraft:powered_rail"
     },
-    "R": {
-      "item": "minecraft:redstone_block"
+    "I": {
+      "item": "minecraft:iron_block"
     },
-    "G": {
-      "item": "minecraft:gold_block"
+    "M": {
+      "item": "minecraft:minecart"
     }
   },
   "result": {

@@ -1,10 +1,13 @@
 package dev.endermanclaude.minecartimprovements;
 
 import net.minecraft.block.AbstractBlock;
-import net.minecraft.block.PoweredRailBlock;
+import net.minecraft.block.RailBlock;
 
-/** Powered rail with a much stronger push. Carts on this block are boosted by the mixin. */
-public class SuperPoweredRailBlock extends PoweredRailBlock {
+/**
+ * Super powered rail: a plain rail with no redstone braking, so it never stops carts.
+ * The mixin boosts carts on this block.
+ */
+public class SuperPoweredRailBlock extends RailBlock {
     public SuperPoweredRailBlock(AbstractBlock.Settings settings) {
         super(settings);
     }

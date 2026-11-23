@@ -1,3 +1,40 @@
 {
-  "parent": "minecraft:block/rail_flat"
+  "textures": {
+    "rail": "minecart-improvements:block/super_powered_rail",
+    "particle": "minecart-improvements:block/super_powered_rail"
+  },
+  "elements": [
+    {
+      "from": [
+        0,
+        0,
+        0
+      ],
+      "to": [
+        16,
+        1,
+        16
+      ],
+      "faces": {
+        "down": {
+          "texture": "#rail"
+        },
+        "up": {
+          "texture": "#rail"
+        },
+        "north": {
+          "texture": "#rail"
+        },
+        "south": {
+          "texture": "#rail"
+        },
+        "west": {
+          "texture": "#rail"
+        },
+        "east": {
+          "texture": "#rail"
+        }
+      }
+    }
+  ]
 }

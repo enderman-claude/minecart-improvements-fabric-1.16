@@ -2,7 +2,7 @@
 
 Minecart changes for Minecraft 1.16.5 with Fabric: slope and gravity effects, faster carts on rail, rail jumps sized to the gap, a super powered rail, and smoothed acceleration.
 
-Super Powered Rail recipe: 4 powered rails, redstone blocks, and gold blocks in a 3x3 pattern (PRP / RGR / PRP), yields 4 rails.
+Super Powered Rail recipe: powered rails, iron blocks, and a minecart in a 3x3 pattern (PIP / IMI / PIP), yields 4 rails. The rail is a plain rail with no redstone braking.
 
 v0.2.1 removed the speed-cap mixin, which targeted a method that doesn't exist in 1.16.5 and crashed the game at startup.
 
