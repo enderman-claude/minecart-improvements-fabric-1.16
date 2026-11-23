@@ -1,4 +1,5 @@
 {
+  "parent": "minecraft:block/block",
   "textures": {
     "rail": "minecart-improvements:block/super_powered_rail",
     "particle": "minecart-improvements:block/super_powered_rail"
@@ -12,27 +13,18 @@
       ],
       "to": [
         16,
-        1,
+        0.1,
         16
       ],
       "faces": {
-        "down": {
-          "texture": "#rail"
-        },
         "up": {
-          "texture": "#rail"
-        },
-        "north": {
-          "texture": "#rail"
-        },
-        "south": {
-          "texture": "#rail"
-        },
-        "west": {
-          "texture": "#rail"
-        },
-        "east": {
-          "texture": "#rail"
+          "texture": "#rail",
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ]
         }
       }
     }

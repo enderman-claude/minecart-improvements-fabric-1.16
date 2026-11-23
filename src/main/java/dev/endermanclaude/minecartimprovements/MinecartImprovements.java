@@ -13,10 +13,10 @@ public class MinecartImprovements implements ModInitializer {
     public static final String MOD_ID = "minecart-improvements";
 
     public static final SuperPoweredRailBlock SUPER_POWERED_RAIL = new SuperPoweredRailBlock(
-            FabricBlockSettings.copyOf(Blocks.POWERED_RAIL));
+            FabricBlockSettings.copyOf(Blocks.RAIL));
 
     public static final Item SUPER_POWERED_RAIL_ITEM = new BlockItem(
-            SUPER_POWERED_RAIL, new Item.Settings().group(ItemGroup.REDSTONE));
+            SUPER_POWERED_RAIL, new Item.Settings().group(ItemGroup.TRANSPORTATION));
 
     @Override
     public void onInitialize() {

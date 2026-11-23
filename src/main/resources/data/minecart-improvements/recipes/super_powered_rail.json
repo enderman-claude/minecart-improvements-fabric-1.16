@@ -1,18 +1,18 @@
 {
   "type": "minecraft:crafting_shaped",
   "pattern": [
-    "PIP",
-    "IMI",
-    "PIP"
+    "RIR",
+    "ICI",
+    "RIR"
   ],
   "key": {
-    "P": {
-      "item": "minecraft:powered_rail"
+    "R": {
+      "item": "minecraft:rail"
     },
     "I": {
       "item": "minecraft:iron_block"
     },
-    "M": {
+    "C": {
       "item": "minecraft:minecart"
     }
   },
