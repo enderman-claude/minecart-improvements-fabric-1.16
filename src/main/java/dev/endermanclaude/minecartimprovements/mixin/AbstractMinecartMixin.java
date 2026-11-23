@@ -74,15 +74,14 @@ public abstract class AbstractMinecartMixin {
         ci.cancel();
     }
 
-    @Inject(method = "tick", at = @At("TAIL"))
-    private void minecartImprovements$tick(CallbackInfo ci) {
+    /** Rail logic runs after vanilla moveOnRail(BlockPos, BlockState) (Yarn 1.16.5 name and descriptor). */
+    @Inject(method = "moveOnRail(Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/BlockState;)V", at = @At("TAIL"))
+    private void minecartImprovements$onRail(BlockPos pos, BlockState under, CallbackInfo ci) {
         if (minecartImprovements$airborne) {
             return;
         }
         AbstractMinecartEntity self = (AbstractMinecartEntity) (Object) this;
         World world = self.getEntityWorld();
-        BlockPos pos = self.getBlockPos();
-        BlockState under = world.getBlockState(pos);
         boolean onRail = AbstractRailBlock.isRail(under);
         boolean onSuper = under.getBlock() instanceof SuperPoweredRailBlock;
 
