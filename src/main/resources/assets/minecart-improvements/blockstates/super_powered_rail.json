@@ -1,6 +1,36 @@
 {
   "variants": {
-    "": {
+    "shape=north_south": {
+      "model": "minecart-improvements:block/super_powered_rail"
+    },
+    "shape=east_west": {
+      "model": "minecart-improvements:block/super_powered_rail",
+      "y": 90
+    },
+    "shape=ascending_east": {
+      "model": "minecart-improvements:block/super_powered_rail",
+      "y": 90
+    },
+    "shape=ascending_west": {
+      "model": "minecart-improvements:block/super_powered_rail",
+      "y": 90
+    },
+    "shape=ascending_north": {
+      "model": "minecart-improvements:block/super_powered_rail"
+    },
+    "shape=ascending_south": {
+      "model": "minecart-improvements:block/super_powered_rail"
+    },
+    "shape=south_east": {
+      "model": "minecart-improvements:block/super_powered_rail"
+    },
+    "shape=south_west": {
+      "model": "minecart-improvements:block/super_powered_rail"
+    },
+    "shape=north_west": {
+      "model": "minecart-improvements:block/super_powered_rail"
+    },
+    "shape=north_east": {
       "model": "minecart-improvements:block/super_powered_rail"
     }
   }

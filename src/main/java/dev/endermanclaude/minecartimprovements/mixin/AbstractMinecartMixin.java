@@ -13,10 +13,11 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * All cart changes run at the end of each tick, in order:
- * slope, speed boosts, jump launch, then a smoothing limit on acceleration.
- * Speeds are in blocks per tick (20 ticks per second).
- * Tunable constants. UNTESTED in game.
+ * Cart changes.
+ * HEAD of tick: while airborne, this mod moves the cart itself (gravity, then landing),
+ * so vanilla rail snapping cannot pull it back down into the block below.
+ * TAIL of tick, when on rail: slope, speed boosts, jump launch, then smoothing.
+ * Speeds are in blocks per tick (20 ticks per second). Tunable constants. UNTESTED in game.
  */
 @Mixin(AbstractMinecartEntity.class)
 public abstract class AbstractMinecartMixin {
@@ -30,17 +31,54 @@ public abstract class AbstractMinecartMixin {
     private static final double SUPER_BOOST = 0.1D;   // blocks per tick added per tick on super rail
     // smoothing: largest horizontal speed increase allowed in one tick, on any rail
     private static final double MAX_ACCEL_STEP = 0.05D;
-    // jumps
+    // jumps and flight
     private static final double GRAVITY = 0.04D;      // vertical acceleration per tick
     private static final double JUMP_MIN_SPEED = 0.3D;
     private static final double JUMP_MIN_VY = 0.15D;
     private static final double JUMP_MAX_VY = 0.7D;
     private static final int MAX_GAP = 4;
+    private static final int MAX_AIR_TICKS = 200;
 
     private double minecartImprovements$lastHorizontal = 0.0D;
+    private boolean minecartImprovements$airborne = false;
+    private int minecartImprovements$airTicks = 0;
+    private BlockPos minecartImprovements$launchPos = null;
+
+    /** While airborne, move the cart ourselves and skip vanilla rail logic for this tick. */
+    @Inject(method = "tick", at = @At("HEAD"), cancellable = true)
+    private void minecartImprovements$flight(CallbackInfo ci) {
+        if (!minecartImprovements$airborne) {
+            return;
+        }
+        AbstractMinecartEntity self = (AbstractMinecartEntity) (Object) this;
+        World world = self.getEntityWorld();
+
+        Vec3d v = self.getVelocity();
+        Vec3d nv = new Vec3d(v.x, v.y - GRAVITY, v.z);
+        self.setPos(self.getX() + nv.x, self.getY() + nv.y, self.getZ() + nv.z);
+        self.setVelocity(nv);
+        minecartImprovements$airTicks++;
+
+        BlockPos p = self.getBlockPos();
+        boolean landed = nv.y < 0.0D
+                && !p.equals(minecartImprovements$launchPos)
+                && AbstractRailBlock.isRail(world.getBlockState(p))
+                && self.getY() <= p.getY() + 0.5D;
+        if (landed) {
+            self.setPos(self.getX(), p.getY() + 0.0625D, self.getZ());
+            self.setVelocity(new Vec3d(nv.x, 0.0D, nv.z));
+            minecartImprovements$airborne = false;
+        } else if (minecartImprovements$airTicks > MAX_AIR_TICKS) {
+            minecartImprovements$airborne = false;
+        }
+        ci.cancel();
+    }
 
     @Inject(method = "tick", at = @At("TAIL"))
     private void minecartImprovements$tick(CallbackInfo ci) {
+        if (minecartImprovements$airborne) {
+            return;
+        }
         AbstractMinecartEntity self = (AbstractMinecartEntity) (Object) this;
         World world = self.getEntityWorld();
         BlockPos pos = self.getBlockPos();
@@ -67,16 +105,16 @@ public abstract class AbstractMinecartMixin {
             }
         }
 
-        // 3. jump: on rail, fast, with a missing rail ahead. Launch height is set so the
-        //    cart lands on the next rail at the current horizontal speed.
+        // 3. jump: fast on rail, with no rail ahead on the same level. Start flight and size
+        //    the launch so the cart reaches the next rail at its current horizontal speed.
         h = horizontal(v);
         if (onRail && h >= JUMP_MIN_SPEED && Math.abs(v.y) < 0.05D) {
             int dx = (int) Math.round(v.x / h);
             int dz = (int) Math.round(v.z / h);
-            if (!AbstractRailBlock.isRail(world.getBlockState(pos.add(dx, 0, dz)))) {
+            if (!isRailAt(world, pos.add(dx, 0, dz))) {
                 int gap = -1;
                 for (int k = 1; k <= MAX_GAP; k++) {
-                    if (AbstractRailBlock.isRail(world.getBlockState(pos.add(dx * k, 0, dz * k)))) {
+                    if (isRailAt(world, pos.add(dx * k, 0, dz * k))) {
                         gap = k;
                         break;
                     }
@@ -86,6 +124,9 @@ public abstract class AbstractMinecartMixin {
                     double vy = GRAVITY * airTicks / 2.0D;
                     vy = Math.max(JUMP_MIN_VY, Math.min(JUMP_MAX_VY, vy));
                     v = new Vec3d(v.x, vy, v.z);
+                    minecartImprovements$airborne = true;
+                    minecartImprovements$airTicks = 0;
+                    minecartImprovements$launchPos = pos;
                 }
             }
         }
@@ -100,6 +141,13 @@ public abstract class AbstractMinecartMixin {
 
         self.setVelocity(v);
         minecartImprovements$lastHorizontal = h;
+    }
+
+    /** A rail on this block or one level above or below, so ramps count as rail. */
+    private static boolean isRailAt(World world, BlockPos p) {
+        return AbstractRailBlock.isRail(world.getBlockState(p))
+                || AbstractRailBlock.isRail(world.getBlockState(p.up()))
+                || AbstractRailBlock.isRail(world.getBlockState(p.down()));
     }
 
     private static double horizontal(Vec3d v) {
