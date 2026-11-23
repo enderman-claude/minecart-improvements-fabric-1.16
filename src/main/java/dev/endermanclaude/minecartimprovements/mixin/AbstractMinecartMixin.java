@@ -37,6 +37,7 @@ public abstract class AbstractMinecartMixin {
     private static final double JUMP_MIN_VY = 0.15D;
     private static final double JUMP_MAX_VY = 0.7D;
     private static final int MAX_GAP = 4;
+    private static final double FORCE_LAUNCH_VY = 0.5D; // launch speed for the upward single-rail rule
     private static final int MAX_AIR_TICKS = 200;
 
     private double minecartImprovements$lastHorizontal = 0.0D;
@@ -102,6 +103,23 @@ public abstract class AbstractMinecartMixin {
                 v = withHorizontal(v, Math.min(SUPER_CAP, h + SUPER_BOOST));
             } else if (!onSuper && h < FAST_CAP) {
                 v = withHorizontal(v, Math.min(FAST_CAP, h * (1.0D + FAST_BOOST)));
+            }
+        }
+
+        // 3a. rule: on an upward rail with exactly one rail block ahead and nothing after it, force launch.
+        h = horizontal(v);
+        if (onRail && h >= JUMP_MIN_SPEED && Math.abs(v.y) < 0.05D) {
+            int dx = (int) Math.round(v.x / h);
+            int dz = (int) Math.round(v.z / h);
+            boolean upward = AbstractRailBlock.isRail(world.getBlockState(pos.add(dx, 1, dz)));
+            if (upward && isRailAt(world, pos.add(dx, 0, dz))
+                    && !isRailAt(world, pos.add(dx * 2, 0, dz * 2))) {
+                v = new Vec3d(v.x, FORCE_LAUNCH_VY, v.z);
+                minecartImprovements$airborne = true;
+                minecartImprovements$airTicks = 0;
+                minecartImprovements$launchPos = pos;
+                System.out.println(String.format(
+                        "[minecart-improvements] FORCE LAUNCH upward single rail, speed=%.3f", h));
             }
         }
 
