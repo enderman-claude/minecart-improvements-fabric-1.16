@@ -11,7 +11,7 @@ import net.minecraft.client.render.RenderLayer;
 public class MinecartImprovementsClient implements ClientModInitializer {
     private static final String[] CANDIDATES = {
             "net.fabricmc.fabric.api.client.rendering.v1.BlockRenderLayerMap",
-            "net.fabricmc.fabric.api.client.render.BlockRenderLayerMap"
+            "net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap"
     };
 
     @Override
