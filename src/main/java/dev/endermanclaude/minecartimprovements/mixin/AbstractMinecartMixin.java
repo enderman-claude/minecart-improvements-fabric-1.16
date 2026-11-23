@@ -3,6 +3,8 @@ package dev.endermanclaude.minecartimprovements.mixin;
 import dev.endermanclaude.minecartimprovements.SuperPoweredRailBlock;
 import net.minecraft.block.AbstractRailBlock;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.enums.RailShape;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.entity.vehicle.AbstractMinecartEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
@@ -39,6 +41,7 @@ public abstract class AbstractMinecartMixin {
     private static final int MAX_GAP = 4;
     private static final double FORCE_LAUNCH_VY = 0.5D; // launch speed for the upward single-rail rule
     private static final int MAX_AIR_TICKS = 200;
+    private static final int MAX_WALK = 6; // rails to follow along the track
 
     private double minecartImprovements$lastHorizontal = 0.0D;
     private boolean minecartImprovements$airborne = false;
@@ -57,7 +60,22 @@ public abstract class AbstractMinecartMixin {
 
         Vec3d v = self.getVelocity();
         Vec3d nv = new Vec3d(v.x, v.y - GRAVITY, v.z);
-        self.setPos(self.getX() + nv.x, self.getY() + nv.y, self.getZ() + nv.z);
+        double nx = self.getX() + nv.x;
+        double ny = self.getY() + nv.y;
+        double nz = self.getZ() + nv.z;
+
+        // Ground collision: if the block the cart would be inside is solid, stop on top of it.
+        BlockPos feet = new BlockPos(MathHelper.floor(nx), MathHelper.floor(ny), MathHelper.floor(nz));
+        if (!world.getBlockState(feet).getCollisionShape(world, feet).isEmpty()) {
+            self.setPos(nx, feet.getY() + 1.0D, nz);
+            self.setVelocity(new Vec3d(nv.x, 0.0D, nv.z));
+            minecartImprovements$airborne = false;
+            System.out.println("[minecart-improvements] flight ended on solid ground");
+            ci.cancel();
+            return;
+        }
+
+        self.setPos(nx, ny, nz);
         self.setVelocity(nv);
         minecartImprovements$airTicks++;
 
@@ -106,14 +124,11 @@ public abstract class AbstractMinecartMixin {
             }
         }
 
-        // 3a. rule: on an upward rail with exactly one rail block ahead and nothing after it, force launch.
+        // 3a. rule: on an upward rail, with exactly one rail ahead along the connected track
+        //     and nothing after it, force launch.
         h = horizontal(v);
         if (onRail && h >= JUMP_MIN_SPEED && Math.abs(v.y) < 0.05D) {
-            int dx = (int) Math.round(v.x / h);
-            int dz = (int) Math.round(v.z / h);
-            boolean upward = AbstractRailBlock.isRail(world.getBlockState(pos.add(dx, 1, dz)));
-            if (upward && isRailAt(world, pos.add(dx, 0, dz))
-                    && !isRailAt(world, pos.add(dx * 2, 0, dz * 2))) {
+            if (isUpwardSingleRail(world, pos, v)) {
                 v = new Vec3d(v.x, FORCE_LAUNCH_VY, v.z);
                 minecartImprovements$airborne = true;
                 minecartImprovements$airTicks = 0;
@@ -175,6 +190,110 @@ public abstract class AbstractMinecartMixin {
         return AbstractRailBlock.isRail(world.getBlockState(p))
                 || AbstractRailBlock.isRail(world.getBlockState(p.up()))
                 || AbstractRailBlock.isRail(world.getBlockState(p.down()));
+    }
+
+    /** Connected-track detection. Returns true for an upward rail with exactly one connected rail ahead. */
+    private static boolean isUpwardSingleRail(World world, BlockPos pos, Vec3d v) {
+        RailShape here = shapeAt(world, pos);
+        if (here == null) {
+            return false;
+        }
+        int[][] dirs = directionsOf(here);
+        int[] forward = null;
+        double best = 0.0D;
+        for (int[] d : dirs) {
+            double dot = d[0] * v.x + d[1] * v.z;
+            if (dot > best) {
+                best = dot;
+                forward = d;
+            }
+        }
+        if (forward == null) {
+            return false;
+        }
+        BlockPos ahead = findRailNear(world, pos.add(forward[0], 0, forward[1]));
+        if (ahead == null) {
+            return false;
+        }
+        boolean upward = ahead.getY() > pos.getY();
+
+        int count = 1;
+        BlockPos cur = ahead;
+        int[] back = {-forward[0], -forward[1]};
+        for (int i = 0; i < MAX_WALK; i++) {
+            RailShape s = shapeAt(world, cur);
+            if (s == null) {
+                break;
+            }
+            int[] next = null;
+            for (int[] d : directionsOf(s)) {
+                if (d[0] != back[0] || d[1] != back[1]) {
+                    next = d;
+                }
+            }
+            if (next == null) {
+                break;
+            }
+            BlockPos after = findRailNear(world, cur.add(next[0], 0, next[1]));
+            if (after == null) {
+                break;
+            }
+            count++;
+            back = new int[] {-next[0], -next[1]};
+            cur = after;
+        }
+        return upward && count == 1;
+    }
+
+    /** The two horizontal directions (x, z) a rail shape connects to. */
+    private static int[][] directionsOf(RailShape shape) {
+        final int[] n = {0, -1};
+        final int[] s = {0, 1};
+        final int[] e = {1, 0};
+        final int[] w = {-1, 0};
+        switch (shape) {
+            case NORTH_SOUTH:
+            case ASCENDING_NORTH:
+            case ASCENDING_SOUTH:
+                return new int[][] {n, s};
+            case EAST_WEST:
+            case ASCENDING_EAST:
+            case ASCENDING_WEST:
+                return new int[][] {e, w};
+            case SOUTH_EAST:
+                return new int[][] {s, e};
+            case SOUTH_WEST:
+                return new int[][] {s, w};
+            case NORTH_WEST:
+                return new int[][] {n, w};
+            case NORTH_EAST:
+                return new int[][] {n, e};
+            default:
+                return new int[][] {n, s};
+        }
+    }
+
+    /** The rail shape at a position, or null if there is no rail. */
+    private static RailShape shapeAt(World world, BlockPos p) {
+        BlockState state = world.getBlockState(p);
+        if (!AbstractRailBlock.isRail(state)) {
+            return null;
+        }
+        return state.get(((AbstractRailBlock) state.getBlock()).getShapeProperty());
+    }
+
+    /** A rail at this position, one block up, or one block down. Slopes connect across levels. */
+    private static BlockPos findRailNear(World world, BlockPos p) {
+        if (AbstractRailBlock.isRail(world.getBlockState(p))) {
+            return p;
+        }
+        if (AbstractRailBlock.isRail(world.getBlockState(p.up()))) {
+            return p.up();
+        }
+        if (AbstractRailBlock.isRail(world.getBlockState(p.down()))) {
+            return p.down();
+        }
+        return null;
     }
 
     private static double horizontal(Vec3d v) {
