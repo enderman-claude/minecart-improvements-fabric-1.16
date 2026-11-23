@@ -24,8 +24,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(AbstractMinecartEntity.class)
 public abstract class AbstractMinecartMixin {
     // slope
-    private static final double SLOPE_GAIN = 2.0D;
-    private static final double SLOPE_MAX_DELTA = 0.25D;
     // speed
     private static final double FAST_CAP = 0.8D;      // normal rail top speed (16 b/s)
     private static final double FAST_BOOST = 0.10D;   // fractional gain per tick on normal rail (vanilla loses about 4% per tick)
@@ -107,14 +105,21 @@ public abstract class AbstractMinecartMixin {
 
         Vec3d v = self.getVelocity();
 
-        // 1. slope: downhill gains horizontal speed, uphill loses it
+        // 1. slope: energy-conserving. Going down converts height into horizontal speed,
+        //    going up converts speed back into height. A loop cannot create speed this way.
         double h = horizontal(v);
         if (h >= 1.0E-4D && v.y != 0.0D) {
-            double delta = Math.max(-SLOPE_MAX_DELTA, Math.min(SLOPE_MAX_DELTA, -v.y * SLOPE_GAIN));
-            v = withHorizontal(v, h * (1.0D + delta));
+            double h2 = h * h;
+            if (v.y < 0.0D) {
+                h2 += 2.0D * GRAVITY * -v.y;
+            } else {
+                h2 = Math.max(0.0D, h2 - 2.0D * GRAVITY * v.y);
+            }
+            v = withHorizontal(v, Math.sqrt(h2));
         }
 
-        // 2. speed boosts while on rail
+        // 2. speed boosts while on rail, capped. The cap is checked after the slope step too,
+        //    so boosts never push a cart past its cap.
         h = horizontal(v);
         if (onRail && h >= 1.0E-4D) {
             if (onSuper && h < SUPER_CAP) {
@@ -122,6 +127,12 @@ public abstract class AbstractMinecartMixin {
             } else if (!onSuper && h < FAST_CAP) {
                 v = withHorizontal(v, Math.min(FAST_CAP, h * (1.0D + FAST_BOOST)));
             }
+        }
+        h = horizontal(v);
+        if (!onSuper && h > FAST_CAP) {
+            v = withHorizontal(v, FAST_CAP);
+        } else if (onSuper && h > SUPER_CAP) {
+            v = withHorizontal(v, SUPER_CAP);
         }
 
         // 3a. rule: on an upward rail, with exactly one rail ahead along the connected track
