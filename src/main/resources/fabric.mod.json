@@ -12,6 +12,9 @@
   "entrypoints": {
     "main": [
       "dev.endermanclaude.minecartimprovements.MinecartImprovements"
+    ],
+    "client": [
+      "dev.endermanclaude.minecartimprovements.MinecartImprovementsClient"
     ]
   },
   "mixins": [
