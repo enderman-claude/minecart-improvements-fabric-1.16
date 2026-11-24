@@ -1,33 +1,6 @@
 {
-  "parent": "minecraft:block/block",
+  "parent": "minecraft:block/rail_flat",
   "textures": {
-    "rail": "minecraft:block/powered_rail",
-    "particle": "minecraft:block/powered_rail"
-  },
-  "elements": [
-    {
-      "from": [
-        0,
-        0,
-        0
-      ],
-      "to": [
-        16,
-        0.1,
-        16
-      ],
-      "faces": {
-        "up": {
-          "texture": "#rail",
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ],
-          "tintindex": 0
-        }
-      }
-    }
-  ]
+    "rail": "minecart-improvements:block/super_powered_rail"
+  }
 }
