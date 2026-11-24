@@ -1,6 +1,6 @@
 # Minecart Improvements (Fabric 1.16.5)
 
-Minecart changes for Minecraft 1.16.5 with Fabric: slope and gravity effects, faster carts on rail, rail jumps sized to the gap, a super powered rail, and smoothed acceleration.
+Minecart changes for Minecraft 1.16.5 with Fabric: slope and gravity effects, faster carts on rail (plain rail only softens vanilla friction, it never accelerates a cart), rail jumps sized to the gap, a super powered rail, and smoothed acceleration.
 
 Super Powered Rail recipe: powered rails, iron blocks, and a minecart in a 3x3 pattern (PIP / IMI / PIP), yields 4 rails. The rail needs redstone power like a vanilla powered rail (power passes between adjacent super rails; straight and sloped only, no curves). Powered, it boosts carts; unpowered, it brakes them to a stop. Its texture is derived from the vanilla rail texture (cyan alloy rails, darker ties, glowing studs).
 
