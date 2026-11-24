@@ -1,5 +1,6 @@
 package dev.endermanclaude.minecartimprovements.mixin;
 
+import dev.endermanclaude.minecartimprovements.MinecartSafety;
 import dev.endermanclaude.minecartimprovements.SuperPoweredRailBlock;
 import net.minecraft.block.AbstractRailBlock;
 import net.minecraft.block.BlockState;
@@ -40,6 +41,9 @@ public abstract class AbstractMinecartMixin {
     private static final double FORCE_LAUNCH_VY = 0.5D; // launch speed for the upward single-rail rule
     private static final int MAX_AIR_TICKS = 200;
     private static final int MAX_WALK = 6; // rails to follow along the track
+    // load protection (see MinecartSafety)
+    private static final double WORLD_BOTTOM_Y = 0.0D;     // 1.16.5 worlds are 256 tall: flight ends below this
+    private static final double WORLD_TOP_Y = 512.0D;      // ...and far above the build limit
 
     private double minecartImprovements$lastHorizontal = 0.0D;
     private boolean minecartImprovements$airborne = false;
@@ -56,19 +60,44 @@ public abstract class AbstractMinecartMixin {
         AbstractMinecartEntity self = (AbstractMinecartEntity) (Object) this;
         World world = self.getEntityWorld();
 
+        // Flight is server-only, and a removed cart must not keep flying: hand it back to vanilla.
+        if (world.isClient || !self.isAlive()) {
+            minecartImprovements$endFlight(self, false);
+            return;
+        }
+
         Vec3d v = self.getVelocity();
         Vec3d nv = new Vec3d(v.x, v.y - GRAVITY, v.z);
         double nx = self.getX() + nv.x;
         double ny = self.getY() + nv.y;
         double nz = self.getZ() + nv.z;
 
-        // Ground collision: if the block the cart would be inside is solid, stop on top of it.
+        // Bad numbers or out of the world: stop the cart and let vanilla take over.
+        if (!MinecartSafety.finite(nx, ny, nz, nv.x, nv.y, nv.z)
+                || ny < WORLD_BOTTOM_Y || ny > WORLD_TOP_Y) {
+            minecartImprovements$endFlight(self, true);
+            return;
+        }
+
+        // Never fly into a chunk that is not loaded: reading blocks there would force the server to
+        // load or generate it on the tick thread. Stop at the edge of the loaded area instead.
         BlockPos feet = new BlockPos(MathHelper.floor(nx), MathHelper.floor(ny), MathHelper.floor(nz));
-        if (!world.getBlockState(feet).getCollisionShape(world, feet).isEmpty()) {
+        if (!world.isChunkLoaded(feet)) {
+            if (MinecartSafety.DEBUG) {
+                MinecartSafety.debug(self, "flight stopped at the edge of loaded chunks");
+            }
+            minecartImprovements$endFlight(self, true);
+            return;
+        }
+
+        // Ground collision: if the block the cart would be inside is solid, stop on top of it.
+        if (!MinecartSafety.stateAt(world, feet).getCollisionShape(world, feet).isEmpty()) {
             self.setPos(nx, feet.getY() + 1.0D, nz);
             self.setVelocity(new Vec3d(nv.x, 0.0D, nv.z));
-            minecartImprovements$airborne = false;
-            System.out.println("[minecart-improvements] flight ended on solid ground");
+            minecartImprovements$endFlight(self, false);
+            if (MinecartSafety.DEBUG) {
+                MinecartSafety.debug(self, "flight ended on solid ground");
+            }
             ci.cancel();
             return;
         }
@@ -80,16 +109,29 @@ public abstract class AbstractMinecartMixin {
         BlockPos p = self.getBlockPos();
         boolean landed = nv.y < 0.0D
                 && !p.equals(minecartImprovements$launchPos)
-                && AbstractRailBlock.isRail(world.getBlockState(p))
+                && AbstractRailBlock.isRail(MinecartSafety.stateAt(world, p))
                 && self.getY() <= p.getY() + 0.5D;
         if (landed) {
             self.setPos(self.getX(), p.getY() + 0.0625D, self.getZ());
             self.setVelocity(new Vec3d(nv.x, 0.0D, nv.z));
-            minecartImprovements$airborne = false;
+            minecartImprovements$endFlight(self, false);
         } else if (minecartImprovements$airTicks > MAX_AIR_TICKS) {
-            minecartImprovements$airborne = false;
+            minecartImprovements$endFlight(self, false);
         }
         ci.cancel();
+    }
+
+    /** Clear flight state. With stop=true the cart also loses its horizontal speed (and any bad values). */
+    private void minecartImprovements$endFlight(AbstractMinecartEntity self, boolean stop) {
+        minecartImprovements$airborne = false;
+        minecartImprovements$airTicks = 0;
+        minecartImprovements$launchPos = null;
+        if (stop) {
+            Vec3d v = self.getVelocity();
+            double vy = Double.isNaN(v.y) || Double.isInfinite(v.y) ? 0.0D : v.y;
+            self.setVelocity(new Vec3d(0.0D, vy, 0.0D));
+            minecartImprovements$lastHorizontal = 0.0D;
+        }
     }
 
     /** Rail logic runs after vanilla moveOnRail(BlockPos, BlockState) (Yarn 1.16.5 name and descriptor). */
@@ -100,6 +142,9 @@ public abstract class AbstractMinecartMixin {
         }
         AbstractMinecartEntity self = (AbstractMinecartEntity) (Object) this;
         World world = self.getEntityWorld();
+        if (world.isClient) {
+            return;
+        }
         boolean onRail = AbstractRailBlock.isRail(under);
         boolean onSuper = under.getBlock() instanceof SuperPoweredRailBlock;
 
@@ -129,13 +174,14 @@ public abstract class AbstractMinecartMixin {
         //     and nothing after it, force launch.
         h = horizontal(v);
         if (onRail && h >= JUMP_MIN_SPEED && Math.abs(v.y) < 0.05D) {
-            if (isUpwardSingleRail(world, pos, v)) {
+            if (isUpwardSingleRail(world, pos, v) && MinecartSafety.takeLaunchSlot(self)) {
                 v = new Vec3d(v.x, FORCE_LAUNCH_VY, v.z);
                 minecartImprovements$airborne = true;
                 minecartImprovements$airTicks = 0;
                 minecartImprovements$launchPos = pos;
-                System.out.println(String.format(
-                        "[minecart-improvements] FORCE LAUNCH upward single rail, speed=%.3f", h));
+                if (MinecartSafety.DEBUG) {
+                    MinecartSafety.debug(self, "FORCE LAUNCH upward single rail, speed=%.3f", h);
+                }
             }
         }
 
@@ -153,7 +199,7 @@ public abstract class AbstractMinecartMixin {
                         break;
                     }
                 }
-                if (gap > 0) {
+                if (gap > 0 && MinecartSafety.takeLaunchSlot(self)) {
                     double airTicks = gap / h;
                     double vy = GRAVITY * airTicks / 2.0D;
                     vy = Math.max(JUMP_MIN_VY, Math.min(JUMP_MAX_VY, vy));
@@ -161,8 +207,9 @@ public abstract class AbstractMinecartMixin {
                     minecartImprovements$airborne = true;
                     minecartImprovements$airTicks = 0;
                     minecartImprovements$launchPos = pos;
-                    System.out.println(String.format(
-                            "[minecart-improvements] JUMP gap=%d speed=%.3f vy=%.3f", gap, h, vy));
+                    if (MinecartSafety.DEBUG) {
+                        MinecartSafety.debug(self, "JUMP gap=%d speed=%.3f vy=%.3f", gap, h, vy);
+                    }
                 }
             }
         }
@@ -178,16 +225,19 @@ public abstract class AbstractMinecartMixin {
         self.setVelocity(v);
         minecartImprovements$lastHorizontal = h;
 
-        // Debug: report what the mod sees, once per second per cart.
-        if (++minecartImprovements$debugTicks % 20 == 0) {
-            System.out.println(String.format(
-                    "[minecart-improvements] onRail=%s super=%s speed=%.3f blocks/tick (%.1f b/s) vy=%.3f airborne=%s",
-                    onRail, onSuper, h, h * 20.0D, v.y, minecartImprovements$airborne));
+        // Debug (off by default): once per second per cart, and capped server-wide.
+        if (MinecartSafety.DEBUG && ++minecartImprovements$debugTicks % 20 == 0) {
+            MinecartSafety.debug(self,
+                    "onRail=%s super=%s speed=%.3f blocks/tick (%.1f b/s) vy=%.3f airborne=%s",
+                    onRail, onSuper, h, h * 20.0D, v.y, minecartImprovements$airborne);
         }
     }
 
     /** A rail on this block or one level above or below, so ramps count as rail. */
     private static boolean isRailAt(World world, BlockPos p) {
+        if (!world.isChunkLoaded(p)) {
+            return false;
+        }
         return AbstractRailBlock.isRail(world.getBlockState(p))
                 || AbstractRailBlock.isRail(world.getBlockState(p.up()))
                 || AbstractRailBlock.isRail(world.getBlockState(p.down()));
@@ -276,7 +326,7 @@ public abstract class AbstractMinecartMixin {
 
     /** The rail shape at a position, or null if there is no rail. */
     private static RailShape shapeAt(World world, BlockPos p) {
-        BlockState state = world.getBlockState(p);
+        BlockState state = MinecartSafety.stateAt(world, p);
         if (!AbstractRailBlock.isRail(state)) {
             return null;
         }
@@ -285,6 +335,9 @@ public abstract class AbstractMinecartMixin {
 
     /** A rail at this position, one block up, or one block down. Slopes connect across levels. */
     private static BlockPos findRailNear(World world, BlockPos p) {
+        if (!world.isChunkLoaded(p)) {
+            return null;
+        }
         if (AbstractRailBlock.isRail(world.getBlockState(p))) {
             return p;
         }
