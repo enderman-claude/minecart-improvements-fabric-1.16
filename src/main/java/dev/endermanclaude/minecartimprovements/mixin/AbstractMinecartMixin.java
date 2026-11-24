@@ -33,6 +33,9 @@ public abstract class AbstractMinecartMixin {
     private static final double SUPER_BOOST = 0.1D;   // blocks per tick added per tick on super rail
     // smoothing: largest horizontal speed increase allowed in one tick, on any rail
     private static final double MAX_ACCEL_STEP = 0.05D;
+    // unpowered super rail brakes like vanilla's unpowered powered rail
+    private static final double BRAKE_FACTOR = 0.5D;
+    private static final double BRAKE_STOP_SPEED = 0.03D;
     // jumps and flight
     private static final double GRAVITY = 0.04D;      // vertical acceleration per tick
     private static final double JUMP_MIN_SPEED = 0.3D;
@@ -146,8 +149,12 @@ public abstract class AbstractMinecartMixin {
     private void minecartImprovements$beginRail(BlockPos pos, BlockState under, CallbackInfo ci) {
         minecartImprovements$railCap = 0.0D;
         if (AbstractRailBlock.isRail(under)) {
-            double cap = under.getBlock() instanceof SuperPoweredRailBlock ? SUPER_CAP : FAST_CAP;
-            minecartImprovements$railCap = Math.min(MAX_STEP, cap);
+            boolean isSuper = under.getBlock() instanceof SuperPoweredRailBlock;
+            if (!isSuper) {
+                minecartImprovements$railCap = Math.min(MAX_STEP, FAST_CAP);
+            } else if (SuperPoweredRailBlock.isActive(under)) {
+                minecartImprovements$railCap = Math.min(MAX_STEP, SUPER_CAP);
+            } // an unpowered super rail gets no raised limit: it is braking
         }
     }
 
@@ -173,6 +180,7 @@ public abstract class AbstractMinecartMixin {
         }
         boolean onRail = AbstractRailBlock.isRail(under);
         boolean onSuper = under.getBlock() instanceof SuperPoweredRailBlock;
+        boolean superPowered = onSuper && SuperPoweredRailBlock.isActive(under);
 
         Vec3d v = self.getVelocity();
 
@@ -182,7 +190,10 @@ public abstract class AbstractMinecartMixin {
 
         // 2. speed boosts while on rail, capped. The cap bounds total speed, so loops cannot build speed.
         h = horizontal(v);
-        if (onRail && h >= 1.0E-4D) {
+        if (onSuper && !superPowered) {
+            // Unpowered super rail: brake, then stop. No boost, so nothing keeps a cart moving forever.
+            v = h < BRAKE_STOP_SPEED ? new Vec3d(0.0D, v.y, 0.0D) : withHorizontal(v, h * BRAKE_FACTOR);
+        } else if (onRail && h >= 1.0E-4D) {
             if (onSuper && h < SUPER_CAP) {
                 v = withHorizontal(v, Math.min(SUPER_CAP, h + SUPER_BOOST));
             } else if (!onSuper && h < FAST_CAP) {
