@@ -14,6 +14,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * Cart changes.
@@ -42,9 +43,14 @@ public abstract class AbstractMinecartMixin {
     private static final int MAX_AIR_TICKS = 200;
     private static final int MAX_WALK = 6; // rails to follow along the track
     // load protection (see MinecartSafety)
+    // Vanilla moves a cart at most getMaxOffRailSpeed() (0.4) blocks per tick no matter its velocity, so the
+    // caps above do nothing unless that limit is raised. Kept at or below 1 block per tick so vanilla's
+    // one-block-at-a-time rail following stays valid.
+    private static final double MAX_STEP = 1.0D;
     private static final double WORLD_BOTTOM_Y = 0.0D;     // 1.16.5 worlds are 256 tall: flight ends below this
     private static final double WORLD_TOP_Y = 512.0D;      // ...and far above the build limit
 
+    private double minecartImprovements$railCap = 0.0D; // movement limit while inside vanilla moveOnRail, else 0
     private double minecartImprovements$lastHorizontal = 0.0D;
     private boolean minecartImprovements$airborne = false;
     private int minecartImprovements$airTicks = 0;
@@ -54,6 +60,7 @@ public abstract class AbstractMinecartMixin {
     /** While airborne, move the cart ourselves and skip vanilla rail logic for this tick. */
     @Inject(method = "tick", at = @At("HEAD"), cancellable = true)
     private void minecartImprovements$flight(CallbackInfo ci) {
+        minecartImprovements$railCap = 0.0D; // never carry a raised limit over from an interrupted tick
         if (!minecartImprovements$airborne) {
             return;
         }
@@ -134,9 +141,28 @@ public abstract class AbstractMinecartMixin {
         }
     }
 
+    /** Before vanilla rail movement: remember how fast this rail lets the cart move this tick. */
+    @Inject(method = "moveOnRail(Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/BlockState;)V", at = @At("HEAD"))
+    private void minecartImprovements$beginRail(BlockPos pos, BlockState under, CallbackInfo ci) {
+        minecartImprovements$railCap = 0.0D;
+        if (AbstractRailBlock.isRail(under)) {
+            double cap = under.getBlock() instanceof SuperPoweredRailBlock ? SUPER_CAP : FAST_CAP;
+            minecartImprovements$railCap = Math.min(MAX_STEP, cap);
+        }
+    }
+
+    /** Raise vanilla's per-tick movement limit (0.4) to the rail's cap, only while moving along a rail. */
+    @Inject(method = "getMaxOffRailSpeed", at = @At("RETURN"), cancellable = true)
+    private void minecartImprovements$maxStep(CallbackInfoReturnable<Double> cir) {
+        if (minecartImprovements$railCap > cir.getReturnValueD()) {
+            cir.setReturnValue(minecartImprovements$railCap);
+        }
+    }
+
     /** Rail logic runs after vanilla moveOnRail(BlockPos, BlockState) (Yarn 1.16.5 name and descriptor). */
     @Inject(method = "moveOnRail(Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/BlockState;)V", at = @At("TAIL"))
     private void minecartImprovements$onRail(BlockPos pos, BlockState under, CallbackInfo ci) {
+        minecartImprovements$railCap = 0.0D; // vanilla rail movement is over
         if (minecartImprovements$airborne) {
             return;
         }
