@@ -4,6 +4,7 @@ import dev.endermanclaude.minecartimprovements.MinecartSafety;
 import dev.endermanclaude.minecartimprovements.SuperPoweredRailBlock;
 import net.minecraft.block.AbstractRailBlock;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
 import net.minecraft.block.enums.RailShape;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.entity.vehicle.AbstractMinecartEntity;
@@ -28,7 +29,9 @@ public abstract class AbstractMinecartMixin {
     // slope
     // speed
     private static final double FAST_CAP = 0.8D;      // normal rail top speed (16 b/s)
-    private static final double FAST_BOOST = 0.10D;   // fractional gain per tick on normal rail (vanilla loses about 4% per tick)
+    // Plain rail friction relief: fraction (in log terms) of vanilla's drag that is cancelled on flat plain rail.
+    // 0 = vanilla friction, 1 = no friction. Must stay below 1 so a cart always slows down on its own.
+    private static final double RAIL_FRICTION_RELIEF = 0.5D;
     private static final double SUPER_CAP = 2.0D;     // super powered rail top speed (40 b/s)
     private static final double SUPER_BOOST = 0.1D;   // blocks per tick added per tick on super rail
     // smoothing: largest horizontal speed increase allowed in one tick, on any rail
@@ -54,6 +57,7 @@ public abstract class AbstractMinecartMixin {
     private static final double WORLD_TOP_Y = 512.0D;      // ...and far above the build limit
 
     private double minecartImprovements$railCap = 0.0D; // movement limit while inside vanilla moveOnRail, else 0
+    private double minecartImprovements$speedBefore = -1.0D; // horizontal speed entering vanilla moveOnRail, -1 if unknown
     private double minecartImprovements$lastHorizontal = 0.0D;
     private boolean minecartImprovements$airborne = false;
     private int minecartImprovements$airTicks = 0;
@@ -64,6 +68,7 @@ public abstract class AbstractMinecartMixin {
     @Inject(method = "tick", at = @At("HEAD"), cancellable = true)
     private void minecartImprovements$flight(CallbackInfo ci) {
         minecartImprovements$railCap = 0.0D; // never carry a raised limit over from an interrupted tick
+        minecartImprovements$speedBefore = -1.0D;
         if (!minecartImprovements$airborne) {
             return;
         }
@@ -116,16 +121,25 @@ public abstract class AbstractMinecartMixin {
         self.setVelocity(nv);
         minecartImprovements$airTicks++;
 
+        // Land exactly where vanilla would put the cart. snapPositionToRail is the same call vanilla's rail
+        // movement uses to place a cart on the rail line and surface (slopes included), so the next vanilla
+        // tick has nothing left to correct and the cart cannot jump.
         BlockPos p = self.getBlockPos();
-        boolean landed = nv.y < 0.0D
-                && !p.equals(minecartImprovements$launchPos)
-                && AbstractRailBlock.isRail(MinecartSafety.stateAt(world, p))
-                && self.getY() <= p.getY() + 0.5D;
-        if (landed) {
-            self.setPos(self.getX(), p.getY() + 0.0625D, self.getZ());
-            self.setVelocity(new Vec3d(nv.x, 0.0D, nv.z));
-            minecartImprovements$endFlight(self, false);
-        } else if (minecartImprovements$airTicks > MAX_AIR_TICKS) {
+        boolean landed = false;
+        if (nv.y < 0.0D && !p.equals(minecartImprovements$launchPos)) {
+            Vec3d rail = self.snapPositionToRail(nx, ny, nz);
+            if (rail != null
+                    && MinecartSafety.finite(rail.x, rail.y, rail.z)
+                    && ny <= rail.y
+                    && Math.abs(rail.x - nx) <= 1.0D
+                    && Math.abs(rail.z - nz) <= 1.0D) {
+                self.setPos(rail.x, rail.y, rail.z);
+                self.setVelocity(new Vec3d(nv.x, 0.0D, nv.z));
+                minecartImprovements$endFlight(self, false);
+                landed = true;
+            }
+        }
+        if (!landed && minecartImprovements$airTicks > MAX_AIR_TICKS) {
             minecartImprovements$endFlight(self, false);
         }
         ci.cancel();
@@ -148,6 +162,7 @@ public abstract class AbstractMinecartMixin {
     @Inject(method = "moveOnRail(Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/BlockState;)V", at = @At("HEAD"))
     private void minecartImprovements$beginRail(BlockPos pos, BlockState under, CallbackInfo ci) {
         minecartImprovements$railCap = 0.0D;
+        minecartImprovements$speedBefore = horizontal(((AbstractMinecartEntity) (Object) this).getVelocity());
         if (AbstractRailBlock.isRail(under)) {
             boolean isSuper = under.getBlock() instanceof SuperPoweredRailBlock;
             if (!isSuper) {
@@ -170,6 +185,8 @@ public abstract class AbstractMinecartMixin {
     @Inject(method = "moveOnRail(Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/BlockState;)V", at = @At("TAIL"))
     private void minecartImprovements$onRail(BlockPos pos, BlockState under, CallbackInfo ci) {
         minecartImprovements$railCap = 0.0D; // vanilla rail movement is over
+        double speedBefore = minecartImprovements$speedBefore;
+        minecartImprovements$speedBefore = -1.0D;
         if (minecartImprovements$airborne) {
             return;
         }
@@ -196,8 +213,14 @@ public abstract class AbstractMinecartMixin {
         } else if (onRail && h >= 1.0E-4D) {
             if (onSuper && h < SUPER_CAP) {
                 v = withHorizontal(v, Math.min(SUPER_CAP, h + SUPER_BOOST));
-            } else if (!onSuper && h < FAST_CAP) {
-                v = withHorizontal(v, Math.min(FAST_CAP, h * (1.0D + FAST_BOOST)));
+            }
+            // Plain rail: no acceleration of our own. Vanilla drag (x0.96 empty, x0.997 ridden) is only
+            // softened, never cancelled, so a cart can never gain speed here and always coasts to a stop.
+            // Flat plain rail only: relief on slopes would reduce the cost of climbing and let loops make energy.
+            if (under.isOf(Blocks.RAIL) && speedBefore >= 1.0E-4D && h < speedBefore
+                    && !under.get(((AbstractRailBlock) under.getBlock()).getShapeProperty()).isAscending()) {
+                double relieved = speedBefore * Math.pow(h / speedBefore, 1.0D - RAIL_FRICTION_RELIEF);
+                v = withHorizontal(v, Math.min(speedBefore, relieved));
             }
         }
         h = horizontal(v);
