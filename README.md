@@ -8,7 +8,7 @@ Load protection (0.5.7): carts never read blocks in unloaded chunks (so a flying
 
 v0.2.1 removed the speed-cap mixin, which targeted a method that doesn't exist in 1.16.5 and crashed the game at startup.
 
-**Status: untested.** The code has not been run in game yet. The CI build checks that it compiles. Check the mixin target `AbstractMinecartEntity#getMaxSpeed` in your client before relying on it.
+**Status: untested.** The code has not been run in game yet. The CI build checks that it compiles. Vanilla limits cart movement to 0.4 blocks per tick; the mod raises that limit (mixin on `getMaxOffRailSpeed`) only while a cart is moving along a rail.
 
 Clean-room implementation: no code was copied from other mods or from decompiled Minecraft source.
 
